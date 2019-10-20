@@ -82,7 +82,9 @@ class App extends Component {
   
   render() {
     const fns = {updateContent: this.updateContent, updateApp: this.updateApp }
-    const {selected_explore, selected_look, looks} = this.state
+    const {selected_explore, selected_look, looks, app_file} = this.state
+
+    const webhook_url = (app_file && app_file.webhook_url) ? app_file.webhook_url : ''
     
     var selected_look_metadata = {};
     var selected_explore_metadata = {};
@@ -116,12 +118,13 @@ class App extends Component {
           <Grid style={{height: '100vh'}}>
             <Grid.Column stretched width={2} style={{height: '100vh', paddingRight: '0px'}}>
               <CohortMenu
-                 qid={this.state.qid}
-                 space_id={this.state.space_id}
-                 fns={fns}
-                 looks={looks}
-                 selected={selected}
-                 explores={this.state.explores}
+                webhook_url={webhook_url}
+                qid={this.state.qid}
+                space_id={this.state.space_id}
+                fns={fns}
+                looks={looks}
+                selected={selected}
+                explores={this.state.explores}
               ></CohortMenu>
             </Grid.Column>
             <Grid.Column stretched width={14} style={{height: '100vh', paddingLeft: '0px'}}>

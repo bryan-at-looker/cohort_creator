@@ -33,45 +33,6 @@ export default class CreateCohort extends Component {
     this.setState({title: data.value}) 
   }
 
-  executeSql = async (look) => {
-    const {selected} = this.props
-    const {cohort_field_name} = this.state
-    this.setState({running: true})
-
-    const look_query = (look && look.query) ? (look.query) : {}
-    const explore_metadata = (selected && selected.explore_metadata) ? selected.explore_metadata : {}
-    
-    if (look_query !== {} && explore_metadata !== {}) {
-      const cohort_join = find(explore_metadata._cohort_joins, (o) => { return cohort_field_name === o.cohort_dimension } )
-      
-      var [new_query, connection] = await Promise.all([
-        getSQL({
-          model: look_query.model,
-          view: look_query.view,
-          filters: look_query.filters,
-          filter_expression: look_query.filter_expression,
-          fields: [cohort_join.cohort_dimension]
-        }),
-        api31Call('GET',`/connections/${explore_metadata.connection_name}`)
-      ])
-
-      var create_query = await api31Call('POST','/sql_queries','',{
-        model_name: look_query.model,
-        sql: sqlText(connection.dialect_name, cohort_join.view, look.id, new_query )
-      })
-
-      var run_sql = await api31Call('POST',`/sql_queries/${create_query.slug}/run/json`,'',{})
-      this.setState({ 
-        running: false, 
-        finished: true, 
-        finished_rows: (run_sql && run_sql[0] && run_sql[0].update_count) ? run_sql[0].update_count : 0,
-        icon: 'check'
-      }, ()=> {
-        setInterval(()=>{this.setState({icon: 'plus'})},5000)
-      })
-    }
-  }
-
   saveCohort = async () => {
     this.setState({running: true, running_look: this.props.selected.look, message_showing: true})
     var query = await api31Call('GET',`/queries/slug/${this.props.qid}`);
@@ -95,7 +56,20 @@ export default class CreateCohort extends Component {
       })
     })
     this.props.fns.updateApp({selected_look: look.id.toString()})
-    // this.executeSql(look)
+    api31Call('POST','/scheduled_plans/run_once','',{
+      name: `Cohorts - Run ${look.id}`,
+      look_id: look.id,
+      require_no_results: false,
+      require_results: false,
+      require_change: false,
+      scheduled_plan_destination: [
+        {
+          format: 'json',
+          address: this.props.webhook_url,
+          type: 'webhook'
+        }
+      ]
+    })
     this.setState({
       title: ''
     }, () => {

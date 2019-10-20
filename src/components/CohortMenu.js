@@ -26,6 +26,7 @@ export default class CohortMenu extends Component {
           </Menu.Menu>
         </Menu.Item>
         <CreateCohort
+          webhook_url={this.props.webhook_url}
           explores={this.props.explores}
           fns={this.props.fns}
           qid={this.props.qid}

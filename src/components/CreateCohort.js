@@ -1,7 +1,7 @@
 import React, {Component} from 'react';
 import { Menu, Dropdown, Input, Icon, Label, Message } from 'semantic-ui-react';
 import { api31Call, getSQL, sqlText, fnum} from '../helpers';
-import { find, filter } from 'lodash'
+import { find, filter, findIndex } from 'lodash'
 
 import ExploreDropdown from './ExploreDropdown';
 import CohortList from './CohortList';
@@ -55,7 +55,12 @@ export default class CreateCohort extends Component {
         view: find(this.props.selected.explore_metadata._cohort_joins, {'cohort_dimension': this.state.cohort_field_name})['view']
       })
     })
-    this.props.fns.updateApp({selected_look: look.id.toString()})
+    const look_id = look.id.toString()
+    this.props.fns.updateApp({
+      selected_look: look_id,
+      running_cohorts: this.props.notifications.running_cohorts.concat([look_id]),
+      cohort_notifications: this.props.notifications.cohort_notifications.concat([look_id])
+    })
     api31Call('POST','/scheduled_plans/run_once','',{
       name: `Cohorts - Run ${look.id}`,
       look_id: look.id,
@@ -74,7 +79,11 @@ export default class CreateCohort extends Component {
       title: ''
     }, () => {
       this.props.fns.updateContent('looks');
-      setTimeout( () => { this.setState({icon: 'plus'})}, 3000)
+      setTimeout( () => { 
+        this.setState({icon: 'check', running: false}, () => {
+          setTimeout( () => { this.setState({icon: 'plus'})}, 3000)
+        })
+      }, 3000)
     });
     
   }
@@ -85,19 +94,17 @@ export default class CreateCohort extends Component {
     }
     this.setState({[data.id]: data.value})
   }
-
-  clearMessage = (event,data) => {
-    this.setState({running: false, finished: false, message_showing: false, finished_rows: false, running_look: ''})
-  }
   
   render() {
+    console.log(this.props)
     const {qid,selected} = this.props
-    const {cohort_type, cohort_field_name, running, finished, finished_rows, running_look, message_showing} = this.state
+    const {cohort_type, cohort_field_name, running, finished, finished_rows, running_look, message_showing, title} = this.state
 
     var lookup_fields = []
     if (selected.explore_metadata.fields) {
       lookup_fields = cohortFields(selected)
     }
+    const input_error = (findIndex(this.props.looks, {title: title} ) > -1)
 
     return (
       <>
@@ -134,24 +141,20 @@ export default class CreateCohort extends Component {
           </Menu.Item>
           <Menu.Item>
             <Input     
+              error={input_error}
               size='mini'
               action={{ 
                 icon: this.state.icon, 
-                className: (this.state.running && this.props.qid) ? 'loading': '', 
+                className: (running && qid) ? 'loading': '', 
                 onClick: this.saveCohort, 
-                disabled: (this.state.title === '' || !qid || (qid && qid == '')) 
+                disabled: (title === '' || !qid || (qid && qid == '') || input_error) 
               }}
               labelPosition='left'
               onChange={this.handleChange}
-              value={this.state.title}
+              value={title}
             >
             </Input>
           </Menu.Item>
-          {(message_showing) && <Message 
-            onDismiss={this.clearMessage}
-            style={{textAlign: 'left'}} color={(running) ? 'yellow' : 'green'}>
-            {(!finished) ? `Your cohort is currently being persisted. It can be filtered by Cohort ID: ${running_look}` : `Your load is finished! You can now filter by Cohort ID: ${running_look} with ${fnum(finished_rows)} rows`}
-          </Message> }
         </Menu.Menu>
         <CohortList
             fns={this.props.fns}

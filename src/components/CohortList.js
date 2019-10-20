@@ -32,7 +32,6 @@ export default class CohortList extends Component {
         console.log('look description could not be parsed')
       }
       return ( (`${o.query.model}::${o.query.view}`)== selected.explore ) && 
-              !o.deleted &&
               description && 
               description.type==this.props.cohort_type &&
               description.field==this.props.cohort_field_name

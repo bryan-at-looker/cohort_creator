@@ -2,7 +2,7 @@ import React, {Component} from 'react';
 import './css/Explore.css'
 
 const DEFAULT_THEME='arielle_test'
-const FRAME_ID='looker'
+const FRAME_ID='looker-explore'
 const INSTANCE=window.location.origin
 const TYPE = 'explore'
 const DATETIME = 'order_items.created_date'
@@ -20,23 +20,27 @@ export default class ExploreFrame extends Component {
     }
 	}
 	
-  componentWillMount() {
-    window.addEventListener("message", (event) => {
-      if(document.getElementById(FRAME_ID) && document.getElementById(FRAME_ID).contentWindow) {
-        if (event.source === document.getElementById(FRAME_ID).contentWindow) {
-          if (event.origin === window.location.origin) {
-            const data = JSON.parse(event.data)
-            if (data) {
-              console.log({type: data.type, data: data})
-              if (data.explore) {
-                let qid = (new URL(data.explore.absoluteUrl ) ).searchParams.get('qid')
-                if (qid) { this.props.fns.updateApp({qid: qid}) }
-              }
+  handleMessages = (event) => {
+    if(document.getElementById(FRAME_ID) && document.getElementById(FRAME_ID).contentWindow) {
+      if (event.source === document.getElementById(FRAME_ID).contentWindow) {
+        if (event.origin === INSTANCE) {
+          const data = JSON.parse(event.data)
+          if (data) {
+            console.log({type: data.type, data: data})
+            if (data.explore) {
+              let qid = (new URL(data.explore.absoluteUrl ) ).searchParams.get('qid')
+              if (qid) { this.props.fns.updateApp({qid: qid}) }
             }
           }
         }
       }
-    });
+    }
+  }
+	
+  componentWillMount() {window.addEventListener("message", this.handleMessages  )}
+
+  componentWillUnmount() {
+    window.removeEventListener('message', this.handleMessages, false);
   }
   
   handleLoad = () => {

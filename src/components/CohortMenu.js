@@ -1,6 +1,7 @@
 import React, {Component} from 'react';
 import {Menu} from 'semantic-ui-react'
 import CreateCohort from './CreateCohort';
+import Notifications from './Notifications';
 
 const INSTANCE=window.location.origin
 
@@ -21,11 +22,10 @@ export default class CohortMenu extends Component {
         <Menu vertical fluid>
         <Menu.Item>
           Cohort Builder
-          <Menu.Menu>
-
-          </Menu.Menu>
         </Menu.Item>
         <CreateCohort
+          notifications={this.props.notifications}
+          webhook_url={this.props.webhook_url}
           explores={this.props.explores}
           fns={this.props.fns}
           qid={this.props.qid}
@@ -33,7 +33,7 @@ export default class CohortMenu extends Component {
           selected={this.props.selected}
           looks={this.props.looks}  
         ></CreateCohort>
-        <Menu.Item>
+        <Menu.Item  >
           Jump to
           
           <Menu.Menu>
@@ -50,11 +50,13 @@ export default class CohortMenu extends Component {
             >Open the Explore</Menu.Item>
           </Menu.Menu>
           </Menu.Item>
-          {/* <SnapshotCohorts
-            selected={this.props.selected}
-            qid={this.props.qid}
-          ></SnapshotCohorts> */}
-        </Menu>
+          <Menu.Item>
+            <Notifications
+              fns={this.props.fns}
+              notifications={this.props.notifications}
+            ></Notifications>
+          </Menu.Item>          
+        </Menu>            
       </>
     )
   }

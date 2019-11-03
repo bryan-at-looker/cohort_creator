@@ -21,7 +21,6 @@ export default class Notifications extends Component {
   }
   
   render() {
-    // console.log(this.props.notifications)
     const {cohort_notifications, finished_cohorts} = this.props.notifications
     const messages = cohort_notifications.map(id=>{
       var message = (finished_cohorts.indexOf(id)>-1) ? `Finished Cohort ID: ${id}` : `Running Cohort ID: ${id}`

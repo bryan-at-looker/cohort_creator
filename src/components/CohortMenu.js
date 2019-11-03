@@ -22,9 +22,6 @@ export default class CohortMenu extends Component {
         <Menu vertical fluid>
         <Menu.Item>
           Cohort Builder
-          <Menu.Menu>
-
-          </Menu.Menu>
         </Menu.Item>
         <CreateCohort
           notifications={this.props.notifications}
@@ -36,7 +33,7 @@ export default class CohortMenu extends Component {
           selected={this.props.selected}
           looks={this.props.looks}  
         ></CreateCohort>
-        <Menu.Item>
+        <Menu.Item  >
           Jump to
           
           <Menu.Menu>

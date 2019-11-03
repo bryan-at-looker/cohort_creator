@@ -1,20 +1,23 @@
 import React, {Component, Suspense} from 'react'
 import ReactDOM from 'react-dom';
 import { api31Call, getCohortSpace, getFile } from './helpers';
-import { BrowserRouter, Route } from "react-router-dom";
+import { Router, Route } from "react-router-dom";
 import CohortMenu from './components/CohortMenu';
 import "semantic-ui-css/semantic.min.css";
 import {  Grid } from 'semantic-ui-react';
 import './index.css';
 import {find, filter, isEmpty, isEqual, uniq} from 'lodash';
+import history from './history'
+
 
 const APPLICATION_FILE = 'cohort_builder.json'
 const PROJECT = 'reviews'
 
 const Explore = React.lazy(() => import('./components/pages/Explore.js'))
+const Dashboard = React.lazy(() => import('./components/pages/Dashboard.js'))
 const Admin = React.lazy(() => import('./components/pages/admin.js'))
 
-const STORAGE_KEYS = ['selected_look', 'selected_explore'];
+const STORAGE_KEYS = ['selected_explore', 'changeable_menu_item','cohort_field_name','cohort_type'];
 
 let polling_flag = false;
 
@@ -23,12 +26,15 @@ class App extends Component {
     super(props);
     this.state = {
       user: '',
+      changeable_menu_item: 'create',
       selected: {},
       reload: false,
       queries: [],
       running_cohorts: [],
       cohort_notifications: [],
-      finished_cohorts: []
+      finished_cohorts: [],
+      cohort_type: '',
+      previous_selected_look: ''
     };
     STORAGE_KEYS.forEach(key => {
       if (key != 'selected_explore') {
@@ -38,7 +44,7 @@ class App extends Component {
   }
 
   run_cohort = async (look) => {
-    look = awaitapi31Call('GEt',`/looks/${look}`)
+    look = awaitapi31Call('GET',`/looks/${look}`)
   }
 
   queryResults = async () => {
@@ -81,12 +87,10 @@ class App extends Component {
           state_set['cohort_notifications'] = uniq(cohort_notifications.concat(finished))
         }
 
-        console.log(state_set)
         this.setState(state_set, ()=>{
           if (state_set.queries && state_set.queries.length === 0 && not_finished.length===0) {
             polling_flag = false
           }
-          console.log(this.state.running_cohorts)
         })
       }
 
@@ -99,7 +103,6 @@ class App extends Component {
     var {queries} = this.state
     while (polling_flag === true) {
       queries = this.state.queries
-      console.log(queries)
       var new_queries = []
       var outstanding_tasks = filter(queries, {_completed: false}).map(q=>{return q.id})
       if (outstanding_tasks.length > 0) {
@@ -128,11 +131,9 @@ class App extends Component {
   beginPolling = async () => {
     
     var {running_cohorts, queries} = this.state
-    console.log(polling_flag)
     this.checkQueries();
     this.queryResults();
     while (polling_flag === true) {
-      console.log('loop1')
       queries = this.state.queries
       var run_tasks = running_cohorts.map((id)=>{
         var q_check = find(queries, {_look_id: id})
@@ -142,7 +143,6 @@ class App extends Component {
       fin_tasks = filter(fin_tasks, (o)=>{return !isEmpty(o)})
       if (fin_tasks.length > 0) {
         this.setState({queries: fin_tasks.concat(this.state.queries)}, async ()=>{ 
-          console.log(this.state.queries)
           await pause('beginpolling: added tasks')
         })
       } else {
@@ -163,6 +163,7 @@ class App extends Component {
       getFile(PROJECT,APPLICATION_FILE)
       .then ( (file) => {
         const content = JSON.parse(file.contents)
+        
         var explores = Object.keys(content.explores).map(m_e => {
           return api31Call('GET',`/lookml_models/${m_e.split('::')[0]}/explores/${m_e.split('::')[1]}`)
         })
@@ -217,13 +218,16 @@ class App extends Component {
   
   render() {
     const fns = {updateContent: this.updateContent, updateApp: this.updateApp }
-    const {selected_explore, selected_look, looks, app_file, running_cohorts, cohort_notifications, finished_cohorts} = this.state
+    const {selected_explore, selected_look, looks, app_file, running_cohorts, 
+      cohort_notifications, finished_cohorts, changeable_menu_item, 
+      cohort_field_name, qid, cohort_type, previous_selected_look} = this.state
 
     const notifications = { 
       running_cohorts: running_cohorts, 
       cohort_notifications: cohort_notifications,
       finished_cohorts: finished_cohorts
     }
+    
 
     const webhook_url = (app_file && app_file.webhook_url) ? app_file.webhook_url : ''
     
@@ -251,17 +255,21 @@ class App extends Component {
       explore_metadata: selected_explore_metadata,
       look: selected_look,
       look_metadata: selected_look_metadata,
-      look_qid: (selected_look_metadata && selected_look_metadata.query) ? selected_look_metadata.query.client_id : ''
+      look_qid: (selected_look_metadata && selected_look_metadata.query) ? selected_look_metadata.query.client_id : '',
+      changeable_menu_item: changeable_menu_item,
+      cohort_field_name: cohort_field_name,
+      cohort_type: cohort_type,
+      previous_look: previous_selected_look
     }
     return (
       <div>
-        <BrowserRouter basename={'/applications/'+window.lookerMetadata.app.id}>
+        <Router basename={'/applications/'+window.lookerMetadata.app.id} history={history}>
           <Grid style={{height: '100vh'}}>
             <Grid.Column stretched width={2} style={{height: '100vh', paddingRight: '0px'}}>
               <CohortMenu
                 webhook_url={webhook_url}
                 notifications={notifications}
-                qid={this.state.qid}
+                qid={qid}
                 space_id={this.state.space_id}
                 fns={fns}
                 looks={looks}
@@ -271,18 +279,40 @@ class App extends Component {
             </Grid.Column>
             <Grid.Column stretched width={14} style={{height: '100vh', paddingLeft: '0px'}}>
               <Suspense fallback={<div>Loading...</div>}>
-                <Route exact path='/' render={() => <Explore 
-                  fns={fns} 
-                  selected={selected}
-                  reload={this.state.reload}
-                  />}  
+                <Route exact path='/' 
+                  render={() => <Explore 
+                    fns={fns} 
+                    selected={selected}
+                    reload={this.state.reload}
+                    />}  
                 />
-                <Route exact path="/explore" component={Explore} />
+                <Route 
+                  exact path="/create" 
+                  render={() => <Explore 
+                    fns={fns} 
+                    selected={selected}
+                    reload={this.state.reload}
+                    />}  
+                />
+                <Route path='/cohort_dashboard' 
+                  render={() => <Dashboard 
+                    fns={fns} 
+                    selected={selected}
+                    reload={this.state.reload}
+                    />}  
+                />
+                <Route path='/compare_two' 
+                  render={() => <Dashboard 
+                    fns={fns} 
+                    selected={selected}
+                    reload={this.state.reload}
+                    />}  
+                />
                 <Route path="/admin" component={Admin} />
                </Suspense>
             </Grid.Column>
           </Grid>
-        </BrowserRouter>
+        </Router>
       </div>
       )
     }
@@ -294,7 +324,6 @@ class App extends Component {
 
   function pause(id) {
     return new Promise(resolve => setTimeout(() => {
-      // console.log(`pause ${id} is over`);
       resolve();
     }, 10000)); 
   }

@@ -26,7 +26,7 @@ export default class ExploreFrame extends Component {
         if (event.origin === INSTANCE) {
           const data = JSON.parse(event.data)
           if (data) {
-            console.log({type: data.type, data: data})
+            // console.log({type: data.type, data: data})
             if (data.explore) {
               let qid = (new URL(data.explore.absoluteUrl ) ).searchParams.get('qid')
               if (qid) { this.props.fns.updateApp({qid: qid}) }

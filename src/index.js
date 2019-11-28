@@ -8,6 +8,7 @@ import {  Grid } from 'semantic-ui-react';
 import './index.css';
 import {find, filter, isEmpty, isEqual, uniq} from 'lodash';
 import history from './history'
+import {MergeCohorts} from './components/pages/MergeCohorts.js'
 
 
 const APPLICATION_FILE = 'cohort_builder.json'
@@ -15,7 +16,7 @@ const PROJECT = 'reviews'
 
 const Explore = React.lazy(() => import('./components/pages/Explore.js'))
 const Dashboard = React.lazy(() => import('./components/pages/Dashboard.js'))
-const Admin = React.lazy(() => import('./components/pages/admin.js'))
+// const MergeCohorts = React.lazy(() => import('./components/pages/MergeCohorts.js'))
 
 const STORAGE_KEYS = ['selected_explore', 'changeable_menu_item','cohort_field_name','cohort_type'];
 
@@ -179,7 +180,7 @@ class App extends Component {
         })
       })
     })
-    api31Call('GET',`/connections/snowlooker`)
+    // api31Call('GET',`/connections/snowlooker`)
   }
 
   updateContent = async (type) => {
@@ -308,7 +309,14 @@ class App extends Component {
                     reload={this.state.reload}
                     />}  
                 />
-                <Route path="/admin" component={Admin} />
+                <Route path='/merge_cohorts' 
+                  render={() => <MergeCohorts 
+                    fns={fns} 
+                    selected={selected}
+                    reload={this.state.reload}
+                    looks={looks}
+                    />}  
+                />
                </Suspense>
             </Grid.Column>
           </Grid>

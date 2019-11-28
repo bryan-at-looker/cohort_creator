@@ -33,7 +33,6 @@ export default class CohortList extends Component {
       try {
         description = JSON.parse(o.description)
       } catch {
-        console.log('look description could not be parsed')
       }
       return ( (`${o.query.model}::${o.query.view}`)== selected.explore ) && 
               description &&
@@ -47,6 +46,7 @@ export default class CohortList extends Component {
         content={`Cohort ID: ${lk.id}`} 
         trigger={
           <Menu.Item
+            draggable="true"
             id={lk.id}
             active={determineActive(lk.id, selected, qid, lk.query.client_id)}
             onClick={this.handleClick}
@@ -61,7 +61,7 @@ export default class CohortList extends Component {
   
   render() {
     const {looks} = this.props
-    console.log(looks)
+    // console.log(looks)
     var menu_items = (looks && looks.length > 0) ? this.createMenuList() : <></>
     return (
       <>

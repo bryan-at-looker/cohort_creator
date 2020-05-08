@@ -1,7 +1,9 @@
 import React, {useEffect, useState} from 'react'
 import { TextArea, Menu, Button, Grid, Segment, Item } from 'semantic-ui-react';
 import {orderBy, filter} from 'lodash'
+import {onDragStart} from '../../helpers'
 import './css/TypeAheadText.css'
+
 
 const OPERATORS = {
   '+': '+',
@@ -52,7 +54,7 @@ export function TypeAheadText({string, setString, looks, selected, ...props}) {
 
   const list = (orderBy(filtered_looks, [lk => lk.title.toLowerCase()], ['asc'])).map(lk => {
     return  <Menu.Item
-        onDragStart={(event)=>onDragStart(event)}
+        onDragStart={(e)=>onDragStart(e)}
         draggable 
         size="mini"
         id={lk.id}
@@ -66,6 +68,7 @@ export function TypeAheadText({string, setString, looks, selected, ...props}) {
     var t=thing, n=+thing
       return <Button
       draggable
+      style={{marginTop: '3px'}}
       onDragStart={(e)=>{onDragStart(e)}}
       as="span"
       basic={t == n}
@@ -74,28 +77,9 @@ export function TypeAheadText({string, setString, looks, selected, ...props}) {
       key={i}
       position={i}
       value={thing}
-    >{operators[thing] || 'a'}
+    >{operators[thing]}
     </Button>
   })
-
-
-  const createButton = (op) => {
-    return <Button 
-      onDragStart={onDragStart}
-      draggable 
-      active={false}
-      size='mini' 
-      value={op}
-      key={op}>{op}
-    </Button>
-  }
-
-  const onDragStart =  ({target, dataTransfer, ...event}) => {
-    if (target && dataTransfer) {
-      dataTransfer.setData('value', target.getAttribute('value') )
-      dataTransfer.setData('position', target.getAttribute('position'))
-    }
-  }
 
   const onDragOver = (event) => {
     event.preventDefault();
@@ -125,29 +109,15 @@ export function TypeAheadText({string, setString, looks, selected, ...props}) {
 
   return (
     <>
-      <Grid>
-        <Grid.Row>
-          <Grid.Column width='3'>
-            <Menu vertical fluid>
-              <Button.Group fluid>
-                {Object.keys(OPERATORS).map(op=>{return createButton(op)})}
-              </Button.Group>
-              <Menu.Menu>
-                {list}
-              </Menu.Menu>
-            </Menu>
-          </Grid.Column>
-          <Grid.Column width='13'>
-            <Segment 
-            onDrop={onDrop}
-            onDragOver={onDragOver}
-            style={{height: '100%'}}>
-              {things}
-            </Segment>
-          </Grid.Column>
-        </Grid.Row>
-
-      </Grid>
+      <Segment 
+      onDrop={onDrop}
+      onDragOver={onDragOver}
+      style={{
+        height: '90%',
+        textAlign: 'center'
+      }}>
+        {things}
+      </Segment>
     </>
   )
 }

@@ -315,6 +315,7 @@ class App extends Component {
                     selected={selected}
                     reload={this.state.reload}
                     looks={looks}
+                    space_id={this.state.space_id}
                     />}  
                 />
                </Suspense>

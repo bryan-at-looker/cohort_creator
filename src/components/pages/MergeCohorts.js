@@ -1,38 +1,93 @@
 import React, {useEffect, useState} from 'react'
-import { Dropdown, Button, Segment, Menu } from "semantic-ui-react";
-import {find} from 'lodash'
+import { Label, Button, Segment, Icon, Grid, Input, Loader } from "semantic-ui-react";
+import {find, keyBy, findIndex} from 'lodash'
+import {onDragStart, getSqlCountFromSql} from '../../helpers'
+
 
 import "semantic-ui-css/semantic.min.css"
 import { api31Call, api31CallSqlText } from '../../helpers';
 import { TypeAheadText } from './TypeAheadText';
+import { MergeCohortSteps } from './MergeCohortSteps';
+import { RunningTasks } from './RunningTasks';
+
+const OPERATORS = {
+  '+': '+',
+  '-': '-',
+  '∩': '∩',
+  '(': '(',
+  ')': ')'
+}
 
 export function MergeCohorts({...props}) {
-  const [look_count, setLook_count] = useState('');
-  const [sql_out, setSql_out] = useState(undefined)
-  const [string, setString] = useState([' '])
-  // const [sqls, setSqls] = useState(SQLS);
+  const [expression_count, setExpressionCount] = useState('');
+  const [sql_obj, setSqlObj] = useState({})
+  const [sql_slug, setSqlSlug] = useState(undefined)
+  const [string, setString] = useState([])
+  const [look_title, setLookTitle] = useState('')
+  const [explore_ok, setExploreOk] = useState(undefined)
+  const [downloadJson, setDownloadJson] = useState(undefined)
+  const [calculate_loader, setCalculateLoader] = useState(false)
+  const [look_loader, setLookLoader] = useState(false)
+  const [sql_explore_metadata,setSqlExploreMetadata] = useState(undefined)
+  const [show_sql,setShowSql] = useState(false)
+  const [tasks, setTasks] = useState([])
+  const [step_stats, setStepStats] = useState({})
+  
   useEffect(() => {
-    // console.log(props)
-  })
+    if (props.looks) {
+      setString(['(','86', '+', '92', ')','-','90','∩','89'])
+    }
+  },[props.looks])
 
-  // const handleClick = await (sql) => {
-    // create SQL query
-    // create query
-    // save query as look
-  // }
+  useEffect(() => {
+    updateSqlObj(string)
+    setStepStats({})
+  }, [string])
 
-  const string_parsed = getParsed( string.join(' '))
-  // const cool2 = rpnFun(cool, sqls)
-  // const cool2 = rpnFun(["90","83","92","84","+","*","-"], sqls)
-
-  const getLookCount = async (sql) => {
-    var look_count_slug = await api31Call('POST','/sql_queries','',{
-      connection_id: props.selected.explore_metadata.connection_name,
-      sql: `SELECT count(1) as count FROM (${sql})`.replace(/\s+/g,' ')
+  const updateSqlObj = async (st) => {
+    var current_sql_obj = Object.assign({},sql_obj)
+    var new_queries = []
+    var new_query_looks = []
+    st = st.filter((s)=>{ return '+-∩() '.indexOf(s) === -1 })
+    st = st.filter((s)=>{ return Object.keys(current_sql_obj).indexOf(s) === -1 })
+    st.forEach(s=> {
+      var look = find(props.looks, {id: Number(s)});
+      new_query_looks.push(look.id)
+      new_queries.push(getNewSql(look.id, look));
     })
-    var count = await api31Call('POST',`/sql_queries/${look_count_slug.slug}/run/json`,'',{})
-    setLook_count(count[0][Object.keys(count[0])[0]])
-    return look_count_slug.slug
+    const new_queries_out = await Promise.all(new_queries)
+    new_queries_out.forEach(obj=>{
+      current_sql_obj = Object.assign(current_sql_obj,obj)
+    })
+    setSqlObj(current_sql_obj)
+  }
+
+  useEffect(()=>{
+    setExpressionCount('')
+    setSqlSlug(undefined)
+    setExploreOk(undefined)
+    setDownloadJson(undefined)
+    setSqlExploreMetadata(undefined)
+  },[string])
+
+
+  // Start Functions {
+
+  const setSlug = async (sql_out) => {
+    return new Promise ( async (resolve, reject) => {
+      var look_slug = await api31Call('POST','/sql_queries','',{
+        connection_name: props.selected.explore_metadata.connection_name,
+        sql: sql_out
+      })
+      if (look_slug.slug) {
+        setSql_slug(look_slug.slug)
+        resolve(look_slug.slug)
+      }
+    })
+  }
+
+  const getFinalCount = async () => {
+    
   }
 
   const getNewSql = (look_id, look) => {
@@ -45,111 +100,273 @@ export function MergeCohorts({...props}) {
     })
   }
 
-  const getSQLs = (rpn) => {
-    var sql_obj = {}
-    var queries = []
+  const onDrop = ({dataTransfer, ...event}) => {
+    const current_values = [].concat(string)
+    const old_position = (dataTransfer && dataTransfer.getData('position')) ? dataTransfer.getData('position') : undefined
+    if (old_position) {
+      delete current_values[old_position]
+      current_values
+    }
+    var filtered_values = current_values.filter(o=>{ return o!==' '})
+    var new_values = []
+    filtered_values.forEach((v)=>{
+      new_values.push(' ')
+      new_values.push(v)
+    })
+    new_values.push(' ')
+    setString(new_values)
+  }
+
+  const onDragOver = (event) => {
+    event.dataTransfer.dropEffect = 'copy'
+    event.preventDefault();
+  }
+
+  const postForSqlSlug = (sql) => {
+    return new Promise ( async ( resolve, reject ) => {
+      var sql_create = await api31Call('POST','/sql_queries','',{
+        connection_name: props.selected.explore_metadata.connection_name,
+        sql: sql.replace(/\s+/g,' ')
+      })
+      if (sql_create && sql_create.slug) {
+        resolve(sql_create.slug)
+        setSqlSlug(sql_create.slug)
+      }
+    })
+  }
+
+  const checkExplore = (slug) => {
+    return new Promise ( async (resolve, reject) => {
+      var query_id = undefined
+      while (!query_id) {
+        try {
+          var new_query = await api31Call('POST','/queries','',{
+            model: `sql__${slug}`,
+            view: 'sql_runner_query',
+            fields: ['sql_runner_query.count'],
+          })
+        } catch {
+          // console.log(new_query)
+        }
+        if (new_query && new_query.id) {
+          query_id = new_query.id
+          break
+        } else {
+          await setExploreBySqlRun(slug)
+        }
+      }
+      resolve(query_id)
+    })
+  }
+
+  const setExploreBySqlRun = (slug) => {
+    return new Promise ( async (resolve, reject) => {
+      var sql_download = await api31Call('POST',`/sql_queries/${slug}/run/json`,'download=true',{})            
+      setDownloadJson(sql_download)
+      setExploreOk(true)
+      resolve(sql_download)
+    })
+  }
+
+  const getCountFromExplore = (slug) => {
     return new Promise( async (resolve, reject) => {
-      rpn.forEach(r => {
-        var t=r, n=+t
-        if (n == t) {
-          var look = find(props.looks, {id: n})
-          if (look) {
-            queries.push(getNewSql(t,look))
-          }
+      var count_query = await api31Call('POST','/queries','',{
+        model: `sql__${slug}`,
+        view: 'sql_runner_query',
+        fields: ['sql_runner_query.count'],
+      })
+      var get_count = await api31Call('GET',`/queries/${count_query.id}/run/json`,'cache=true')
+      const count = get_count[0][Object.keys(get_count[0])[0]]
+      setExpressionCount(count)
+      resolve({count: count, field: Object.keys(get_count[0])[0], query_id: count_query.id})
+    })
+  }
+
+  const calculateButton = async (rpn_sql, rpn) => {
+    var task_id = await getSqlCountFromSql(rpn_sql, props.selected.explore_metadata.connection_name)
+    updateTasks([{ops: rpn, task: task_id}],'add')
+    // return new Promise ( async (resolve, reject ) => {
+    //   setCalculateLoader(true)
+    //   var slug
+    //   if (!sql_slug) {
+    //     slug = await postForSqlSlug(rpn_sql)
+    //   } else {
+    //     slug = sql_slug
+    //   }
+    //   if (!explore_ok) {
+    //     await checkExplore(slug)
+    //   }
+    //   var explore_metadata = await getCountFromExplore(slug)
+      // setCalculateLoader(false)
+      // setSqlExploreMetadata(explore_metadata)
+      // resolve(explore_metadata)
+    // })
+  }
+
+  const saveButton = async (rpn_sql) => {
+    setLookLoader(true)
+    var explore_metadata
+    if (!sql_explore_metadata) {
+      explore_metadata = await calculateButton(rpn_sql)
+    } else {
+      explore_metadata = sql_explore_metadata
+    }
+
+    var look =  await api31Call('POST','/looks','', {
+      query_id: explore_metadata.query_id,
+      space_id: props.space_id,
+      title: look_title,
+      description: JSON.stringify({
+        type: 'Cohort Expression',
+        field: props.selected.cohort_field_name,
+        view: find(props.selected.explore_metadata._cohort_joins, {'cohort_dimension': props.selected.cohort_field_name})['view'],
+        expression: rpn,
+        slug: sql_slug
+      })
+    })
+    setLookLoader(false)
+    props.fns.updateContent('looks')
+  }
+
+  const updateTasks = (task_arr, type) => {
+    var new_arr = [].concat(tasks)
+    if (type === 'add') {
+      task_arr.forEach(t=>{
+        if (findIndex(new_arr, {ops: t.ops}) === -1 ) {
+          new_arr.push(t)
         }
       })
-      var queries_out = await Promise.all(queries)
-      queries_out.forEach(q=> { Object.assign(sql_obj, q)})
-      resolve(sql_obj)
+    } else if (type === 'remove' ) {
+      task_arr.forEach(t=>{
+        const i = findIndex(new_arr, {ops: t.ops})
+        if ( i > -1) {
+          new_arr = new_arr.slice(0, i).concat(new_arr.slice(i + 1, new_arr.length))
+        }
+      })
+    }
+    setTasks(new_arr)
+  }
+
+  const setTaskCounts = async (finished_tasks) => {
+    const get_results = finished_tasks.map(t=>{
+      return api31Call('GET',`/query_tasks/${t.task}/results`)
     })
-  }
-
-  const saveLook = async () => {
-    var createLookSQL = await api31Call('POST','/sql_queries','',{
-      connection_id: selected.explore_metadata.connection_name,
-      sql_text: sql
+    const results = await Promise.all(get_results)
+    const task_obj = finished_tasks.map((t,i)=>{
+      const first_row = results[i]['data'][0]['sql_runner_query.count']
+      return {
+        ops: t.ops,
+        count: first_row['rendered'] || first_row['value'] || first_row
+      }
     })
-    var runLook
+    updateTaskCounts(task_obj)
   }
 
-  const saveCohort = async (rpn) => {
-    var sqls_new = await getSQLs(rpn)
-    var create_sql = rpnFun(rpn, sqls_new)
-    setSql_out(create_sql.sql)
-    var slug = getLookCount(create_sql.sql)
-    
-
-    // var createLookSQL = api31Call('POST','/sql_queries','',{
-    //   connection_id: props.explore_metadata.connection_name,
-    //   sql_text: sql
-    // })
-
-    // var create_sql_explore = await api31Call('POST','')
-    // var new_query = await api31Call('POST','/queries','',{
-    //   model: query.model,
-    //   view: query.view,
-    //   fields: this.props.selected.explore_metadata._default_fields,
-    //   filters: query.filters,
-    //   filter_expression: query.filter_expression,
-    //   dynamic_fields: query.dynamic_fields,
-    //   limit: query.limit
-    // })
-    // var look =  await api31Call('POST','/looks','', {
-    //   query_id: new_query.id,
-    //   space_id: this.props.space_id,
-    //   title: this.state.title,
-    //   description: JSON.stringify({
-    //     type: this.props.selected.cohort_type,
-    //     field: this.props.selected.cohort_field_name,
-    //     view: find(this.props.selected.explore_metadata._cohort_joins, {'cohort_dimension': this.props.selected.cohort_field_name})['view']
-    //   })
-    // })
-    // const look_id = look.id.toString()
-    // this.props.fns.updateApp({
-    //   selected_look: look_id,
-    //   running_cohorts: this.props.notifications.running_cohorts.concat([look_id]),
-    //   cohort_notifications: this.props.notifications.cohort_notifications.concat([look_id])
-    // })
-    // api31Call('POST','/scheduled_plans/run_once','',{
-    //   name: `Cohorts - Run ${look.id}`,
-    //   look_id: look.id,
-    //   require_no_results: false,
-    //   require_results: false,
-    //   require_change: false,
-    //   scheduled_plan_destination: [
-    //     {
-    //       format: 'json',
-    //       address: this.props.webhook_url,
-    //       type: 'webhook'
-    //     }
-    //   ]
-    // })
-    // this.setState({
-    //   title: ''
-    // }, () => {
-    //   this.props.fns.updateContent('looks');
-    //   setTimeout( () => { 
-    //     this.setState({icon: 'check', running: false}, () => {
-    //       setTimeout( () => { this.setState({icon: 'plus'})}, 3000)
-    //     })
-    //   }, 3000)
-    // });
+  const updateTaskCounts = (result) => {
+    var new_obj = {}
+    result.forEach(r=>{
+      new_obj[r.ops] = String(r.count)
+    })
+    var cur_steps = Object.assign({},step_stats)
+    setStepStats(Object.assign(cur_steps,new_obj))
   }
 
+  // } End Functions
+
+  const string_parsed = getParsed( string.filter(s=>{return s !==' '}))
   const verify = verifyString(string_parsed)
+  const rpn = (verify.ok) ? string_parsed : []
+  const rpn_obj = rpnFun(rpn, sql_obj)
+  
+  const rpn_sql = (verify.ok && rpn_obj.sql) ? rpn_obj.sql : ''
+  const found_look_title = find(props.looks || [], {title: look_title})
+  const look_title_error = ( found_look_title && found_look_title.title ) ? true : false
+  const look_obj = keyBy(props.looks,'id')
+  const steps = (rpn_obj && rpn_obj.steps) ? rpn_obj.steps : []
 
   return (
     <>
-    <Segment>
-      <TypeAheadText string={string} setString={setString} {...props}></TypeAheadText>
-      <br></br>
-      <Button
-        disabled = {!verify.ok}
-        onClick={()=>{saveCohort(string_parsed)}}
-      >{verify.ok ? 'Calculate': verify.message }</Button>
-      {sql_out && <p style={{"whiteSpace": "pre"}}>{sql_out}</p>}
-      <h1>{look_count}</h1>
-    </Segment>
+    <Grid stretched>
+      <Grid.Row >
+        <Grid.Column width="7" style={{paddingRight: '0px'}}>
+          <Segment style={{textAlign: 'center'}}>
+            {Object.keys(OPERATORS).map(op=>{return createButton(op)})}
+            <Button 
+              className="blue"
+              onDragOver={(e)=>{onDragOver(e)}}
+              onDragEnter={(e)=>{onDragOver(e)}}
+              onDrop={(e)=>{onDrop(e)}}
+              style={{minWidth: 'calc(100% / 7)'}}
+              draggable={false}
+              active={false}
+              icon='trash'
+            ></Button>
+            <TypeAheadText string={string} setString={setString} {...props}></TypeAheadText>
+          </Segment>
+        </Grid.Column>
+      <Grid.Column width="9" style={{paddingLeft: '0px'}}>
+        <Segment style={{textAlign: 'center'}}>
+          <Button basic={!show_sql} onClick={()=>{setShowSql(!show_sql)}}>SQL</Button>
+          <RunningTasks 
+            steps = {steps}
+            look_obj={look_obj}
+            tasks={tasks} 
+            updateTasks={updateTasks}
+            setTaskCounts={setTaskCounts}
+            step_stats={step_stats}
+          ></RunningTasks>
+          <Button 
+            as='div' 
+            labelPosition='right'
+          >
+            <Button 
+              basic
+              disabled={!verify.ok}
+              onClick={()=>{calculateButton(rpn_sql, rpn_obj.s[0])}}
+              loading={((step_stats && step_stats[rpn_obj.s[0]]) || findIndex(tasks, {ops: rpn_obj.s[0]}) === -1 ) ? false : true}
+            >
+             <Icon name='calculator' />
+              Calculate
+            </Button>
+            <Label as='a' basic pointing='left'>
+              {(step_stats[rpn_obj.s]) ? step_stats[rpn_obj.s[0]] : ''}
+            </Label>
+          </Button>
+            <Input     
+              size='medium'
+              id="look-input"
+              error={look_title_error}
+              size='small'
+              action={{ 
+                icon:'plus',
+                className: (look_loader) ? 'loading': '', 
+                onClick: ()=>{saveButton(rpn_sql)},
+                disabled: (look_title === '' || look_title_error)
+              }}
+              labelPosition='right'
+              placeholder="Cohort Name"
+              onChange={(event,data)=>{setLookTitle(data.value)}}
+              value={look_title}
+            >
+            </Input>
+            <Segment       
+              style={{ height: '90%', textAlign: 'left', "whiteSpace": "pre-wrap", wordWrap: "break-word" }}
+            >
+              { !verify.ok && <>{verify.message}</>}
+              { !show_sql && verify.ok &&<MergeCohortSteps
+                step_stats={step_stats}
+                updateTasks={updateTasks}
+                selected={props.selected}
+                rpn_obj={rpn_obj}
+                tasks={keyBy(tasks,'ops')}
+                look_obj={look_obj}
+                ></MergeCohortSteps> }
+              { show_sql && verify.ok && <>{rpn_sql}</> }
+            </Segment>
+          </Segment>
+        </Grid.Column>     
+      </Grid.Row>
+    </Grid>
     </>
   )
 }
@@ -193,8 +410,8 @@ function getParsed(infix) {
     return this.top;
   }
   
-  infix = infix.replace(/\s+/g,' '); // remove spaces, so infix[i]!=" "
-  infix = infix.trim().split(' ')
+  // infix = infix.replace(/\s+/g,' '); // remove spaces, so infix[i]!=" "
+  // infix = infix.trim().split(' ')
   
   var s = new Stack();
   var ops = "-+∩";
@@ -237,10 +454,11 @@ function getParsed(infix) {
   }
   postfix += s.dataStore.reverse().join(' ');
   postfix = postfix.replace(/\s+/g,' ')
-  return postfix.split(' ')
+  return postfix.split(' ').filter(o=>{return o != ''})
 }
 
 function rpnFun (rpn, sqls) {
+  var steps = []
   var s=[];
 
   var sql_map = {"∩":"INTERSECT", "+":"UNION", "-":"EXCEPT"};  
@@ -252,16 +470,18 @@ function rpnFun (rpn, sqls) {
     }
     else {
       var o2=s.pop(), o1=s.pop()
+      const cur_ops = `${o1}${t}${o2}`
       if (s.length === 0) {
-        sqls[0] = [sqls[o1], sql_map[t], sqls[o2]].join('\n')
+        sqls[cur_ops] = [sqls[o1], sql_map[t], sqls[o2]].join('\n')
+        steps.push({o1: o1, o2: o2, op: t, sql: [sqls[o1], sql_map[t], sqls[o2]].join('\n'), cur_ops: cur_ops})
       } else {
-        sqls[0] = ['SELECT * FROM (', sqls[o1], sql_map[t], sqls[o2], ')'].join('\n')
+        steps.push({o1: o1, o2: o2, op: t, sql: ['SELECT * FROM (', sqls[o1], sql_map[t], sqls[o2], ')'].join('\n'), cur_ops: cur_ops})
+        sqls[cur_ops] = ['SELECT * FROM (', sqls[o1], sql_map[t], sqls[o2], ')'].join('\n')
       }
-      
-      s.push(0)
+      s.push(cur_ops)
     }
   }
-  return {s: s, sql: sqls[s]}
+  return {s: s, sql: sqls[s], steps: steps}
 }
 
 function verifyString(e) {
@@ -278,6 +498,9 @@ function verifyString(e) {
     if (n == t)
       s.push(n)
     else {
+      if ('()'.indexOf(t) > -1) {
+        return error('Unclosed Parantheses!')
+      }
       if ('+-∩'.indexOf(t) == -1) {
         return error('Unknown operator!')
       }
@@ -296,4 +519,15 @@ function verifyString(e) {
     return error('Insufficient operands!')
   }
   return ok()
+}
+
+function createButton (op) {
+  return <Button 
+  style={{minWidth: 'calc(100% / 7)'}}
+    onDragStart={(e)=>{onDragStart(e)}}
+    draggable 
+    active={false}
+    value={op}
+    key={op}>{op}
+  </Button>
 }

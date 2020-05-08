@@ -12,6 +12,7 @@ const CHANGEABLE_MENU = [
   {key: 'create', text: 'Create Cohorts', value: 'create'},
   {key: 'cohort_dashboard', text: 'Cohort Dashboard', value: 'cohort_dashboard'},
   {key: 'compare_two', text: 'Compare Two Cohorts', value: 'compare_two'},
+  {key: 'merge_cohorts', text: 'Merge Cohorts', value: 'merge_cohorts'},
 ]
 
 export default class CreateCohort extends Component {

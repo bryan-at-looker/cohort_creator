@@ -1,4 +1,7 @@
 module.exports = {
+  node: {
+    fs: 'empty'
+  },
   devServer: {
     host: "localhost",
     port: 8080,
@@ -16,7 +19,8 @@ module.exports = {
     // `chunkFilename` provides a template for naming code-split bundles (optional)
     chunkFilename: '[name].main.js',
     // `publicPath` is where Webpack will load your bundles from (optional)
-    publicPath: 'https://bryan-at-looker.s3.amazonaws.com/cohort-creator/'
+    // publicPath: 'https://bryan-at-looker.s3.amazonaws.com/cohort-creator/'
+    publicPath: 'https://localhost:8080/'
   },
   module: {
     rules: [

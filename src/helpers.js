@@ -15,6 +15,19 @@ export function api31Call(method, path, queryParams, payload) {
   return fetch(url, obj).then(
     response => response.json())
 }
+
+export function api31CallSqlText(method, path, queryParams, payload) {
+  let url = '/api/internal/core/3.1' + [path, queryParams].join('?')
+  let obj = { 
+    method: method,
+    headers: {
+      "x-csrf-token": readCookie('CSRF-TOKEN')
+    },
+    body: JSON.stringify(payload)
+  }
+  return fetch(url, obj).then(
+    response => response.text())
+}
   
 function readCookie(cookieName) {
   var re = new RegExp('[; ]'+cookieName+'=([^\\s;]*)');
@@ -152,4 +165,100 @@ export function fnum(x) {
 	}
 
 	return "1T+";
+}
+
+export function onDragStart ({target, dataTransfer, ...event}) {
+  if (target && dataTransfer) {
+    dataTransfer.setData('value', target.getAttribute('value') )
+    dataTransfer.setData('position', target.getAttribute('position'))
+  }
+}
+
+export async function getSqlCountFromSql (sql, conn) {
+  return new Promise ( async (resolve, reject ) => {
+    var post_sql_query = await api31Call('POST', '/sql_queries','',{
+      connection_name: conn,
+      sql: sql.replace(/\s+/g,' ')
+    })
+    var new_sql_query_explore_id
+    while (!new_sql_query_explore_id) {
+      try {
+        var new_sql_explore = await api31Call('POST','/queries','cache=true',{
+          model: `sql__${post_sql_query.slug}`,
+          view: 'sql_runner_query',
+          fields: ['sql_runner_query.count'],
+          limit: '2'
+        })
+      } catch {
+        // console.log(new_query)
+      }
+      if (new_sql_explore && new_sql_explore.id) {
+        new_sql_query_explore_id = new_sql_explore.id
+      } else {
+        await setExploreBySqlRun(post_sql_query.slug)
+      }
+    }
+    var qt = await api31Call('POST',`/query_tasks`,'cache=true', {
+      query_id: new_sql_query_explore_id,
+      result_format: 'json_detail',
+      source: 'explore'
+    })
+    resolve(qt.id)
+  })
+}
+
+export async function getLookFieldCountFromLookId (look_id) {
+  return new Promise ( async ( resolve, reject ) => {
+    var look = await api31Call('GET',`/looks/${look_id}`)
+    var field
+    try {
+      const look_description = JSON.parse(look.description)
+      field = look_description.field
+    } catch {
+      console.error('look description could not be parsed')
+    }
+    var query = look.query
+    query.fields = [field]
+    query.limit = -1
+    query.client_id = null
+    query.id = null
+    var new_query = await api31Call('POST','/queries','',query)
+    var new_query_sql = await api31CallSqlText('GET',`/queries/${new_query.id}/run/sql`)
+    new_query_sql = new_query_sql.replace('LIMIT 100000','')
+    var post_sql_query = await api31Call('POST', '/sql_queries','',{
+      model_name: query.model,
+      sql: new_query_sql.replace(/\s+/g,' ')
+    })
+    var new_sql_query_explore_id
+    while (!new_sql_query_explore_id) {
+      try {
+        var new_sql_explore = await api31Call('POST','/queries','',{
+          model: `sql__${post_sql_query.slug}`,
+          view: 'sql_runner_query',
+          fields: ['sql_runner_query.count'],
+          limit: '2'
+        })
+      } catch {
+        // console.log(new_query)
+      }
+      if (new_sql_explore && new_sql_explore.id) {
+        new_sql_query_explore_id = new_sql_explore.id
+      } else {
+        await setExploreBySqlRun(post_sql_query.slug)
+      }
+    }
+    var qt = await api31Call('POST',`/query_tasks`,'cache=true', {
+      query_id: new_sql_query_explore_id,
+      result_format: 'json_detail',
+      source: 'explore'
+    })
+    resolve(qt.id)
+  })
+}
+
+function setExploreBySqlRun (slug) {
+  return new Promise ( async (resolve, reject) => {
+    var sql_download = await api31Call('POST',`/sql_queries/${slug}/run/json`,'download=true',{})            
+    resolve(sql_download)
+  })
 }

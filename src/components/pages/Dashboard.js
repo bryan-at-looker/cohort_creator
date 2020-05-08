@@ -65,7 +65,6 @@ export default class ExploreFrame extends Component {
       postLooker(req);
       if (looks.length === 2) {
         setTimeout(()=>{
-          console.log('RUN')
           postLooker({type: 'dashboard:run'})
         },750)
       }
@@ -80,13 +79,11 @@ export default class ExploreFrame extends Component {
     const {dashboard_load_complete} = this.state
     const pdashboard_load_complete = pstate.dashboard_load_complete
     var looks = []
-    console.log(sel)
     if (sel && sel.look && sel.look.length > 0 ) { looks.push(sel.look) }
     if (sel && sel.previous_look && sel.previous_look.length > 0 ) { looks.push(sel.previous_look) }
     if (looks.length > 0) {
       this.updateCohortFilter(looks)
     }
-    console.log(looks)
   }
   
   render() {
